@@ -1,0 +1,50 @@
+#!/usr/bin/env zsh
+
+_zalias_cheatsheet() {
+  emulate -L zsh
+  local key row file cyan='' dim='' reset=''
+  local -i width=5
+  local -a lines=()
+
+  if [[ ! -t 1 || "${TERM}" == 'dumb' ]]; then
+    for key in "${(@ko)_zalias_descriptions}"; do
+      print -r -- "${key}: $_zalias_descriptions[${key}]"
+    done
+    for key in "${(@ko)function_descs}"; do
+      print -r -- "${key}: $function_descs[${key}]"
+    done
+    return
+  fi
+
+  if [[ -z "${NO_COLOR-}" ]]; then
+    cyan=$'\e[1;36m' dim=$'\e[2m' reset=$'\e[0m'
+  fi
+
+  for key in "${(@k)_zalias_descriptions}"; do
+    ((${#key} > width)) && width=${#key}
+  done
+
+  lines=("${cyan}Alias cheatsheet${reset}" '')
+  for key in "${(@ko)_zalias_descriptions}"; do
+    printf -v row '%s%-*s%s  %s' "${cyan}" "${width}" "${key}" "${reset}" "$_zalias_descriptions[${key}]"
+    lines+=("${row}" "${dim}  ${aliases[${key}]-${galiases[${key}]-}}${reset}" '')
+  done
+
+  lines+=('Function cheatsheet' '')
+  for key in "${(@ko)function_descs}"; do
+    lines+=("${key}: $function_descs[${key}]")
+  done
+
+  if [[ -n "${TMUX-}" && -t 0 ]] && ((${+commands[tmux]} && ${+commands[less]})); then
+    file="$(mktemp "${TMPDIR:-/tmp}/zalias.XXXXXXXX")" || return 1
+    {
+      print -rl -- "$lines[@]" > "${file}" || return 1
+      command tmux display-popup -E -w '90%' -h '85%' -T 'Aliases - q to close' \
+        "${(q)commands[less]} -R -S -- ${(q)file}" && return 0
+    } always {
+      command rm -f -- "${file}"
+    }
+  fi
+
+  print -rl -- "$lines[@]"
+}

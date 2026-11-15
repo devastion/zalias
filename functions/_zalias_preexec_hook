@@ -1,0 +1,29 @@
+#!/usr/bin/env zsh
+
+_zalias_preexec_hook() {
+  emulate -L zsh
+
+  local name best_name
+  local -a typed_words=() definition_words=() reply=()
+  local -i best_length=0
+  typeset -gA _zalias_tipped
+
+  [[ -n "${1}" && "${1}" != *$'\n'* ]] || return 0
+  typed_words=("${(@Q)${(z)1}}")
+  typed_words=("${(@)typed_words/#\~/${HOME}}")
+
+  for name in "${(@k)aliases}"; do
+    _zalias_split_definition "${aliases[${name}]}" || continue
+    definition_words=("${(@)reply}")
+    [[ "${definition_words[1]}" == "${name}" ]] && continue
+    ((${#definition_words} <= ${#typed_words} && ${#definition_words} > best_length)) || continue
+    [[ "${(pj:\0:)definition_words}" == "${(pj:\0:)typed_words[1,${#definition_words}]}" ]] || continue
+    ((${#${(j: :)definition_words}} > ${#name})) || continue
+    best_name="${name}"
+    best_length=${#definition_words}
+  done
+
+  [[ -n "${best_name}" ]] && ((! ${+_zalias_tipped[${best_name}]})) || return 0
+  _zalias_tipped[${best_name}]=1
+  print -u2 -r -- "Tip: ${best_name} = ${aliases[${best_name}]}"
+}

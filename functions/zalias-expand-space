@@ -1,0 +1,20 @@
+#!/usr/bin/env zsh
+
+zalias-expand-space() {
+  emulate -L zsh
+
+  local word="${LBUFFER##*[[:space:]]}"
+  local before="${LBUFFER}"
+
+  if [[ -n "${word}" ]] && ((${+_zalias_expand_on_space[${word}]} && ${+widgets[_expand_alias]})); then
+    zle _expand_alias
+  fi
+
+  if [[ "${LBUFFER}" != "${before}" ]] && ((${+_zalias_no_trailing_space[${word}]})); then
+    [[ "${LBUFFER}" == *' ' ]] && LBUFFER="${LBUFFER% }"
+  else
+    zle self-insert
+  fi
+}
+
+zalias-expand-space "$@"

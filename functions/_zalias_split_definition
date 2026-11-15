@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+_zalias_split_definition() {
+  emulate -L zsh -o extended_glob
+
+  local definition="${1}"
+  local -a match mbegin mend
+  [[ "${definition}" != *('$('|'`')* ]] || return 1
+  reply=("${(@Q)${(z)definition}}")
+  reply=("${(@)reply//(#b)\$\{([A-Za-z_][A-Za-z0-9_]#)\}/${(P)match[1]}}")
+  ((${#reply}))
+}

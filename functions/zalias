@@ -1,0 +1,79 @@
+#!/usr/bin/env zsh
+# desc: Define and list aliases and function descriptions
+
+zmodload zsh/zutil || return
+autoload -Uz _zalias_collect_function_descriptions _zalias_cheatsheet _zalias_read_desc_line
+
+typeset -gA _zalias_expand_on_space _zalias_no_trailing_space _zalias_descriptions
+
+zalias() {
+  emulate -L zsh
+  local usage='Usage: zalias [-e] [-b] [-g] [-d description] [--] name=value [...]
+       zalias [name]'
+  local -a opt_e=() no_space_options=() opt_g=() opt_d=()
+  local definition key
+
+  zparseopts -D -F -- \
+    e=opt_e \
+    b=no_space_options \
+    g=opt_g \
+    d:=opt_d || return 2
+
+  if (($# == 0)) || { (($# == 1)) && [[ "${1}" != *'='* ]]; }; then
+    if ((${#opt_e} || ${#no_space_options} || ${#opt_g} || ${#opt_d})); then
+      print -u2 -r -- "${usage}"
+      return 2
+    fi
+
+    local -A function_descs=()
+    _zalias_collect_function_descriptions
+    (($#)) || {
+      _zalias_cheatsheet
+      return
+    }
+
+    if ((${+_zalias_descriptions[${1}]})); then
+      print -r -- "$_zalias_descriptions[${1}]"
+    elif ((${+function_descs[${1}]})); then
+      print -r -- "$function_descs[${1}]"
+    else
+      print -u2 -r -- "zalias: no description for alias or function: ${1}"
+      return 1
+    fi
+    return
+  fi
+
+  for definition in "$@"; do
+    if [[ "${definition}" != [^=]*'='* ]]; then
+      print -u2 -r -- "${usage}"
+      return 2
+    fi
+  done
+
+  for definition in "$@"; do
+    key="${definition%%=*}"
+    alias "$opt_g[@]" -- "${definition}" || return
+
+    if ((${#opt_e})); then
+      _zalias_expand_on_space[${key}]=1
+    else
+      unset "_zalias_expand_on_space[${(b)key}]"
+    fi
+
+    if ((${#no_space_options})); then
+      _zalias_no_trailing_space[${key}]=1
+    else
+      unset "_zalias_no_trailing_space[${(b)key}]"
+    fi
+
+    if ((${#opt_d})); then
+      _zalias_descriptions[${key}]="$opt_d[2]"
+    else
+      unset "_zalias_descriptions[${(b)key}]"
+    fi
+  done
+
+  return 0
+}
+
+zalias "$@"

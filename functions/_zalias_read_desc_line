@@ -1,0 +1,14 @@
+#!/usr/bin/env zsh
+
+_zalias_read_desc_line() {
+  emulate -L zsh
+
+  local shebang description
+  REPLY=''
+  {
+    IFS= read -r shebang
+    IFS= read -r description
+  } < "${1}"
+  [[ "${description}" == '# desc: '* ]] || return 1
+  REPLY="${description#\# desc: }"
+}

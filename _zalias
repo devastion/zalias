@@ -1,0 +1,10 @@
+#compdef zalias
+
+_arguments \
+  '-e[Expand the alias when Space is pressed]' \
+  '-b[Do not leave a trailing Space after expansion]' \
+  '-g[Create a global alias]' \
+  '-d[Set the alias description]:description:' \
+  '--[End of options]' \
+  '1:alias or name=value:_aliases' \
+  '*:argument:'
