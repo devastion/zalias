@@ -3,12 +3,14 @@
 _zalias_collect_function_descriptions() {
   emulate -L zsh
   local dir file REPLY
+  typeset -gA _zalias_function_descs
+  _zalias_function_descs=()
   local -a dirs=()
 
   zstyle -a ':zalias:' function-dirs dirs
   for dir in "$dirs[@]"; do
     for file in "${dir}"/[^_]*(N-.); do
-      _zalias_read_desc_line "${file}" && function_descs[${file:t}]="${REPLY}"
+      _zalias_read_desc_line "${file}" && _zalias_function_descs[${file:t}]="${REPLY}"
     done
   done
   return 0

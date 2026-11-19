@@ -1,17 +1,18 @@
 #!/usr/bin/env zsh
 
+# Reads _zalias_descriptions and _zalias_function_descs (both global).
 _zalias_cheatsheet() {
   emulate -L zsh
-  local key row file cyan='' dim='' reset=''
+  local key name definition row file cyan='' dim='' reset=''
   local -i width=5
   local -a lines=()
 
   if [[ ! -t 1 || "${TERM}" == 'dumb' ]]; then
     for key in "${(@ko)_zalias_descriptions}"; do
-      print -r -- "${key}: $_zalias_descriptions[${key}]"
+      print -r -- "${key#g:}: $_zalias_descriptions[${key}]"
     done
-    for key in "${(@ko)function_descs}"; do
-      print -r -- "${key}: $function_descs[${key}]"
+    for key in "${(@ko)_zalias_function_descs}"; do
+      print -r -- "${key}: $_zalias_function_descs[${key}]"
     done
     return
   fi
@@ -20,19 +21,27 @@ _zalias_cheatsheet() {
     cyan=$'\e[1;36m' dim=$'\e[2m' reset=$'\e[0m'
   fi
 
-  for key in "${(@k)_zalias_descriptions}"; do
-    ((${#key} > width)) && width=${#key}
+  for key in "${(@k)_zalias_descriptions}" "${(@k)_zalias_function_descs}"; do
+    name="${key#g:}"
+    ((${#name} > width)) && width=${#name}
   done
 
   lines=("${cyan}Alias cheatsheet${reset}" '')
   for key in "${(@ko)_zalias_descriptions}"; do
-    printf -v row '%s%-*s%s  %s' "${cyan}" "${width}" "${key}" "${reset}" "$_zalias_descriptions[${key}]"
-    lines+=("${row}" "${dim}  ${aliases[${key}]-${galiases[${key}]-}}${reset}" '')
+    name="${key#g:}"
+    if [[ "${key}" == g:* ]]; then
+      definition="${galiases[${name}]-}"
+    else
+      definition="${aliases[${name}]-}"
+    fi
+    printf -v row '%s%-*s%s  %s' "${cyan}" "${width}" "${name}" "${reset}" "$_zalias_descriptions[${key}]"
+    lines+=("${row}" "${dim}  ${definition}${reset}" '')
   done
 
-  lines+=('Function cheatsheet' '')
-  for key in "${(@ko)function_descs}"; do
-    lines+=("${key}: $function_descs[${key}]")
+  lines+=("${cyan}Function cheatsheet${reset}" '')
+  for key in "${(@ko)_zalias_function_descs}"; do
+    printf -v row '%s%-*s%s  %s' "${cyan}" "${width}" "${key}" "${reset}" "$_zalias_function_descs[${key}]"
+    lines+=("${row}")
   done
 
   if [[ -n "${TMUX-}" && -t 0 ]] && ((${+commands[tmux]} && ${+commands[less]})); then

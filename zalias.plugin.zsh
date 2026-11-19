@@ -1,7 +1,9 @@
 0=${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}
 0=${${(M)0:#/*}:-$PWD/$0}
 
-typeset -gA _zalias_expand_on_space _zalias_no_trailing_space _zalias_descriptions _zalias_tipped
+typeset -gA _zalias_expand_on_space _zalias_no_trailing_space _zalias_descriptions _zalias_tipped \
+  _zalias_prev_space _zalias_split_cache _zalias_function_descs
+typeset -g _zalias_split_sig=''
 
 ((${fpath[(Ie)${0:h}/functions]})) || fpath=("${0:h}/functions" $fpath)
 ((${fpath[(Ie)${0:h}]})) || fpath+=("${0:h}")
@@ -15,8 +17,15 @@ fi
 
 zle -N zalias-expand-space
 if zstyle -T ':zalias:' bind-space; then
-  bindkey -M emacs ' ' zalias-expand-space
-  bindkey -M viins ' ' zalias-expand-space
+  for _zalias_keymap in emacs viins; do
+    _zalias_widget="${${(z)"$(bindkey -M "${_zalias_keymap}" ' ' 2>/dev/null)"}[-1]}"
+    case "${_zalias_widget}" in
+      '' | undefined-key | zalias-expand-space) ;;
+      *) _zalias_prev_space[${_zalias_keymap}]="${_zalias_widget}" ;;
+    esac
+    bindkey -M "${_zalias_keymap}" ' ' zalias-expand-space
+  done
+  unset _zalias_keymap _zalias_widget
 fi
 
 if ((${+functions[compdef]})); then

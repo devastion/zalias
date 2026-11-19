@@ -5,7 +5,7 @@ A zsh plugin for aliases with descriptions.
 - `zalias -d 'description' name=value` defines an alias and remembers what it is for
 - `zalias` prints a cheatsheet of described aliases and functions, in a tmux popup when possible
 - `zalias -e` aliases expand in place when you press Space; add `-b` to drop the Space
-- A reminder names the alias you could have used when a typed command starts with its definition
+- A reminder names the alias you could have used when a typed command starts with its definition (definitions are parsed once and cached until the alias table changes; those containing `${VAR}` are re-read on every command)
 
 ## Install
 
@@ -54,7 +54,19 @@ bindkey -M viins ' ' zalias-expand-space
 
 Set these before sourcing the plugin; `function-dirs` is read each time `zalias` runs.
 
-Expansion uses the `_expand_alias` widget from compinit, so it needs the completion system loaded. The cheatsheet popup needs `tmux` and `less`; otherwise it prints to the terminal. Piped output is plain `name: description` lines. `NO_COLOR` turns off colours.
+When the plugin binds Space, it remembers the widget that was bound before (for example `magic-space`) and calls it for ordinary Spaces. Source the plugin after your own Space binding.
+
+Global aliases (`-g`) keep their own description and flags, so `G` as a global alias and `G` as a regular alias do not share them.
+
+Expansion uses the `_expand_alias` widget from compinit, so it needs the completion system loaded. Source the plugin before `compinit` so the `_zalias` completion is found through `fpath`. The cheatsheet popup needs tmux 3.2 or later and `less`; otherwise it prints to the terminal. Piped output is plain `name: description` lines. `NO_COLOR` turns off colours.
+
+## Testing
+
+Tests use [ShellSpec](https://github.com/shellspec/shellspec) and run under zsh:
+
+```sh
+shellspec
+```
 
 ## License
 

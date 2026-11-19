@@ -3,22 +3,55 @@
 _zalias_preexec_hook() {
   emulate -L zsh
 
-  local name best_name
+  local name best_name sig word
   local -a typed_words=() definition_words=() reply=()
-  local -i best_length=0
-  typeset -gA _zalias_tipped
+  local -i best_length=0 i
+  typeset -gA _zalias_tipped _zalias_split_cache
+  typeset -g _zalias_split_sig
 
   [[ -n "${1}" && "${1}" != *$'\n'* ]] || return 0
-  typed_words=("${(@Q)${(z)1}}")
-  typed_words=("${(@)typed_words/#\~/${HOME}}")
 
-  for name in "${(@k)aliases}"; do
-    _zalias_split_definition "${aliases[${name}]}" || continue
-    definition_words=("${(@)reply}")
-    [[ "${definition_words[1]}" == "${name}" ]] && continue
+  # Splitting every alias on every command is slow; redo it only when the
+  # alias table changes. Definitions that reference ${VAR} are not cached
+  # (empty marker) and are split again on each command, so they see the
+  # variable's current value.
+  sig="${(pj:\0:)${(@kv)aliases}}"
+  if [[ "${sig}" != "${_zalias_split_sig}" ]]; then
+    _zalias_split_cache=()
+    for name in "${(@k)aliases}"; do
+      if [[ "${aliases[${name}]}" == *'${'* ]]; then
+        _zalias_split_cache[${name}]=''
+        continue
+      fi
+      _zalias_split_definition "${aliases[${name}]}" || continue
+      [[ "${reply[1]}" == "${name}" ]] && continue
+      ((${#${(j: :)reply}} > ${#name})) || continue
+      _zalias_split_cache[${name}]="${(pj:\0:)reply}"
+    done
+    _zalias_split_sig="${sig}"
+  fi
+
+  typed_words=("${(@Q)${(z)1}}")
+  for ((i = 1; i <= ${#typed_words}; i++)); do
+    word="${typed_words[i]}"
+    if [[ "${word}" == '~' ]]; then
+      typed_words[i]="${HOME}"
+    elif [[ "${word}" == '~/'* ]]; then
+      typed_words[i]="${HOME}/${word#\~/}"
+    fi
+  done
+
+  for name in "${(@k)_zalias_split_cache}"; do
+    if [[ -z "${_zalias_split_cache[${name}]}" ]]; then
+      _zalias_split_definition "${aliases[${name}]}" || continue
+      [[ "${reply[1]}" == "${name}" ]] && continue
+      ((${#${(j: :)reply}} > ${#name})) || continue
+      definition_words=("${(@)reply}")
+    else
+      definition_words=("${(@0)_zalias_split_cache[${name}]}")
+    fi
     ((${#definition_words} <= ${#typed_words} && ${#definition_words} > best_length)) || continue
     [[ "${(pj:\0:)definition_words}" == "${(pj:\0:)typed_words[1,${#definition_words}]}" ]] || continue
-    ((${#${(j: :)definition_words}} > ${#name})) || continue
     best_name="${name}"
     best_length=${#definition_words}
   done
