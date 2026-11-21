@@ -1,0 +1,18 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_record_unpack fields-array-name record
+# Fills the associative array `rec` of the caller (declare it with `local -A rec`)
+# with one entry per field name. Missing trailing fields are empty.
+_zalias_record_unpack() {
+  emulate -L zsh
+
+  local -a names=("${(@P)1}") values=("${(@ps:\x1f:)2}")
+  local -i i
+
+  rec=()
+  for ((i = 1; i <= ${#names}; i++)); do
+    rec[${names[i]}]="${values[i]-}"
+  done
+}
+
+_zalias_record_unpack "$@"

@@ -1,0 +1,14 @@
+#!/usr/bin/env zsh
+
+# Prints the zalias usage text to standard error.
+_zalias_usage() {
+  emulate -L zsh
+  print -u2 -r -- 'Usage: zalias [-e] [-b] [-g] [-d description] [-t tag]... [--] name=value [...]
+       zalias -D [--dir=path] [-e] [-b] [-d description] [--] name=value [...]
+       zalias -D [--dir=path] -r name [...]
+       zalias -D --list
+       zalias [name]
+       zalias -s text | --tag tag | --stats | -r name [...]'
+}
+
+_zalias_usage "$@"

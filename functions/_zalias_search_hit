@@ -1,0 +1,15 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_search_hit lowercase-needle text...
+# Succeeds when any of the texts contains the needle, ignoring case.
+_zalias_search_hit() {
+  emulate -L zsh
+  local needle="${1}" text
+  shift
+  for text in "$@"; do
+    [[ "${(L)text}" == *"${needle}"* ]] && return 0
+  done
+  return 1
+}
+
+_zalias_search_hit "$@"

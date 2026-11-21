@@ -1,0 +1,24 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_dir_describe name
+# Prints the description of a directory alias, with its directory, for every
+# directory that defines a described alias of that name. Returns 1 when there is none.
+_zalias_dir_describe() {
+  emulate -L zsh
+  typeset -gA _zalias_dir_defs
+  local key val
+  local -A rec
+  local -i found=0
+
+  for key val in "${(@kv)_zalias_dir_defs}"; do
+    _zalias_dir_key_split "${key}"
+    [[ "${reply[2]}" == "${1}" ]] || continue
+    _zalias_record_unpack _zalias_dir_fields "${val}"
+    [[ -n "${rec[description]}" ]] || continue
+    print -r -- "${rec[description]} [dir: ${reply[1]}]"
+    found=1
+  done
+  ((found))
+}
+
+_zalias_dir_describe "$@"

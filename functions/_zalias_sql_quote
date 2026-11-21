@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+# Sets REPLY to the argument as a single-quoted SQL string literal.
+_zalias_sql_quote() {
+  emulate -L zsh
+  local q="'" value="${1}"
+  # \x1e and \x1f separate rows and fields in the sqlite3 output; drop them.
+  value="${value//[$'\x1e\x1f']/}"
+  REPLY="'${value//${q}/${q}${q}}'"
+}
+
+_zalias_sql_quote "$@"

@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_dir_scope name
+# Sets REPLY to the directory whose definition of alias `name` is applied.
+_zalias_dir_scope() {
+  emulate -L zsh
+  local -A rec
+  _zalias_record_unpack _zalias_dir_state_fields "${_zalias_dir_state[${1}]-}"
+  REPLY="${rec[scope]}"
+}
+
+_zalias_dir_scope "$@"

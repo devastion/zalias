@@ -1,0 +1,103 @@
+#!/usr/bin/env zsh
+
+# Defines the directory-scoped aliases that apply to $PWD (the deepest scope wins
+# per name) and removes the ones that no longer do, restoring any alias they hid.
+# Reads _zalias_dir_defs (see _zalias_dir_define). Keeps what it applied in
+# _zalias_dir_state, one record per alias name (_zalias_dir_state_fields): the
+# directory it came from, the definition applied, and the alias it replaced.
+_zalias_dir_apply() {
+  emulate -L zsh
+  typeset -gA _zalias_dir_defs _zalias_dir_state \
+    _zalias_flags _zalias_descriptions
+
+  ((${#_zalias_dir_defs} || ${#_zalias_dir_state})) || return 0
+
+  local cwd="${PWD:A}" key val dir name REPLY applied
+  local -A want_key want_val want_dir rec st
+
+  for key val in "${(@kv)_zalias_dir_defs}"; do
+    _zalias_dir_key_split "${key}"
+    dir="${reply[1]}"
+    name="${reply[2]}"
+    [[ "${dir}" == / || "${cwd}" == "${dir}" || "${cwd}" == "${dir}"/* ]] || continue
+    if ((! ${+want_key[${name}]})) || ((${#dir} > ${#want_dir[${name}]})); then
+      want_key[${name}]="${key}"
+      want_val[${name}]="${val}"
+      want_dir[${name}]="${dir}"
+    fi
+  done
+
+  # Leave scopes: restore what the alias was before, unless it was changed by hand.
+  for name in "${(@k)_zalias_dir_state}"; do
+    _zalias_record_unpack _zalias_dir_state_fields "${_zalias_dir_state[${name}]}"
+    st=("${(@kv)rec}")
+    _zalias_state_applied
+    applied="${REPLY}"
+    [[ "${st[scope]}" == "${want_dir[${name}]-}" && "${want_val[${name}]-}" == "${applied}" ]] && continue
+    ((${+want_key[${name}]})) && continue # moving to another scope: keep the saved original
+    # Flags and description belong to the directory alias; drop them either way.
+    unset "_zalias_flags[${(b)name}]" "_zalias_descriptions[${(b)name}]"
+    if [[ "${aliases[${name}]-}" == "${st[value]}" ]]; then
+      unalias -- "${name}" 2> /dev/null
+      if [[ "${st[saved_kind]}" == A ]]; then
+        alias -- "${name}=${st[saved_value]}"
+        ((st[saved_flags])) && _zalias_flags[${name}]="${st[saved_flags]}"
+        [[ "${st[saved_has_description]}" == 1 ]] && _zalias_descriptions[${name}]="${st[saved_description]}"
+      fi
+    fi
+    unset "_zalias_dir_state[${(b)name}]"
+  done
+
+  # Enter scopes.
+  for name in "${(@k)want_key}"; do
+    # Aliases share one table with global aliases; do not overwrite a global one.
+    ((${+galiases[${name}]})) && continue
+    st=()
+    if ((${+_zalias_dir_state[${name}]})); then
+      _zalias_record_unpack _zalias_dir_state_fields "${_zalias_dir_state[${name}]}"
+      st=("${(@kv)rec}")
+      _zalias_state_applied
+      [[ "${st[scope]}" == "${want_dir[${name}]}" && "${want_val[${name}]}" == "${REPLY}" ]] && continue
+    else
+      # First time in a scope: remember the alias this one hides.
+      if ((${+aliases[${name}]})); then
+        st[saved_kind]=A
+        st[saved_value]="${aliases[${name}]}"
+        st[saved_flags]="${_zalias_flags[${name}]:-0}"
+        st[saved_has_description]="${+_zalias_descriptions[${name}]}"
+        st[saved_description]="${_zalias_descriptions[${name}]-}"
+      else
+        st[saved_kind]=N
+      fi
+    fi
+    _zalias_record_unpack _zalias_dir_fields "${want_val[${name}]}"
+    alias -- "${name}=${rec[value]}"
+    if ((rec[expand] + 2 * rec[no_space])); then
+      _zalias_flags[${name}]=$((rec[expand] + 2 * rec[no_space]))
+    else
+      unset "_zalias_flags[${(b)name}]"
+    fi
+    if [[ -n "${rec[description]}" ]]; then
+      _zalias_descriptions[${name}]="${rec[description]}"
+    else
+      unset "_zalias_descriptions[${(b)name}]"
+    fi
+    st[scope]="${want_dir[${name}]}"
+    st[value]="${rec[value]}" st[expand]="${rec[expand]}"
+    st[no_space]="${rec[no_space]}" st[description]="${rec[description]}"
+    local -a vals=()
+    local field
+    for field in "${_zalias_dir_state_fields[@]}"; do vals+=("${st[${field}]-}"); done
+    _zalias_record_pack _zalias_dir_state_fields "${vals[@]}"
+    _zalias_dir_state[${name}]="${REPLY}"
+  done
+  return 0
+}
+
+# Sets REPLY to the applied definition held in the state record `st`, packed
+# like a value of _zalias_dir_defs, so the two compare directly.
+_zalias_state_applied() {
+  _zalias_record_pack _zalias_dir_fields "${st[value]}" "${st[expand]}" "${st[no_space]}" "${st[description]}"
+}
+
+_zalias_dir_apply "$@"

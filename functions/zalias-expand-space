@@ -9,7 +9,7 @@ zalias-expand-space() {
 
   if [[ -n "${word}" ]]; then
     for key in "${word}" "g:${word}"; do
-      if ((${+_zalias_expand_on_space[${key}]})); then
+      if ((${_zalias_flags[${key}]:-0} & 1)); then
         flag_key="${key}"
         break
       fi
@@ -18,10 +18,12 @@ zalias-expand-space() {
 
   if [[ -n "${flag_key}" ]] && ((${+widgets[_expand_alias]})); then
     zle _expand_alias
+    # Tell the usage recorder that this line was typed as an alias.
+    [[ "${LBUFFER}" != "${before}" && "${flag_key}" != g:* ]] && _zalias_pending_use[${flag_key}]=1
   fi
 
   if [[ -n "${flag_key}" && "${LBUFFER}" != "${before}" && "${LBUFFER}" == "${before%${word}}"* ]] \
-    && ((${+_zalias_no_trailing_space[${flag_key}]})); then
+    && ((${_zalias_flags[${flag_key}]:-0} & 2)); then
     [[ "${LBUFFER}" == *' ' ]] && LBUFFER="${LBUFFER% }"
   else
     # Fall back to whatever Space did before the plugin bound it.

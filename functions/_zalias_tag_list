@@ -1,0 +1,31 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_tag_list tag
+# Lists the currently defined aliases that carry the tag.
+_zalias_tag_list() {
+  emulate -L zsh
+  local out row key name definition desc
+  local -a rows
+  local -i found=0
+
+  _zalias_sql_quote "${1}"
+  out="$(_zalias_db "SELECT name FROM alias_tag WHERE tag = ${REPLY} ORDER BY name;")" || return 1
+  rows=("${(@ps:\x1e:)out}")
+  for key in "${rows[@]}"; do
+    [[ -n "${key}" ]] || continue
+    name="${key#g:}"
+    if [[ "${key}" == g:* ]]; then
+      ((${+galiases[${name}]})) || continue
+      definition="${galiases[${name}]}"
+    else
+      ((${+aliases[${name}]})) || continue
+      definition="${aliases[${name}]}"
+    fi
+    desc="${_zalias_descriptions[${key}]-}"
+    print -r -- "${name}: ${desc:-${definition}}"
+    found=1
+  done
+  ((found))
+}
+
+_zalias_tag_list "$@"

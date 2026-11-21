@@ -1,0 +1,33 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_remove name ...
+# Removes aliases (regular and global) with their flags, description, usage and tags.
+_zalias_remove() {
+  emulate -L zsh
+  local name key
+  local -a sql=()
+
+  # Check every name first, so a typo does not leave the others half removed.
+  for name in "$@"; do
+    ((${+aliases[${name}]} || ${+galiases[${name}]} || ${+_zalias_descriptions[${name}]} || ${+_zalias_descriptions[g:${name}]} || ${+_zalias_defined[${name}]} || ${+_zalias_defined[g:${name}]})) && continue
+    print -u2 -r -- "zalias: no such alias: ${name}"
+    return 1
+  done
+
+  for name in "$@"; do
+    for key in "${name}" "g:${name}"; do
+      unset "_zalias_flags[${(b)key}]" "_zalias_descriptions[${(b)key}]" "_zalias_defined[${(b)key}]"
+      # Tags go with the row (ON DELETE CASCADE).
+      _zalias_sql_quote "${key}"
+      sql+=("DELETE FROM alias WHERE name = ${REPLY};")
+    done
+    unalias -- "${name}" 2> /dev/null
+  done
+
+  # The database is optional for removal; skip it when there is none.
+  _zalias_db_path
+  [[ -f "${REPLY}" ]] && ((${+commands[sqlite3]})) && _zalias_db "BEGIN; ${(j: :)sql} COMMIT;" > /dev/null
+  return 0
+}
+
+_zalias_remove "$@"

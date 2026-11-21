@@ -1,0 +1,10 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_dir_key dir name
+# Sets REPLY to the key of a directory alias in the _zalias_dir_* tables.
+_zalias_dir_key() {
+  emulate -L zsh
+  REPLY="${1}"$'\x1f'"${2}"
+}
+
+_zalias_dir_key "$@"

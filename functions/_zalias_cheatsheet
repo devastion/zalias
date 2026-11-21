@@ -3,13 +3,26 @@
 # Reads _zalias_descriptions and _zalias_function_descs (both global).
 _zalias_cheatsheet() {
   emulate -L zsh
-  local key name definition row file cyan='' dim='' reset=''
+  local key name definition row file cyan='' dim='' reset='' dkey mark
+  local -A rec
   local -i width=5
   local -a lines=()
 
   if [[ ! -t 1 || "${TERM}" == 'dumb' ]]; then
     for key in "${(@ko)_zalias_descriptions}"; do
-      print -r -- "${key#g:}: $_zalias_descriptions[${key}]"
+      mark=''
+      mark=''
+      if ((${+_zalias_dir_state[${key}]})); then
+        _zalias_dir_scope "${key}"
+        mark=" [dir: ${REPLY}]"
+      fi
+      print -r -- "${key#g:}: $_zalias_descriptions[${key}]${mark}"
+    done
+    for dkey in "${(@ko)_zalias_dir_defs}"; do
+      _zalias_dir_key_split "${dkey}"
+      _zalias_record_unpack _zalias_dir_fields "${_zalias_dir_defs[(e)${dkey}]}"
+      [[ -n "${rec[description]}" ]] && ((! ${+_zalias_dir_state[${reply[2]}]})) \
+        && print -r -- "${reply[2]}: ${rec[description]} [dir: ${reply[1]}]"
     done
     for key in "${(@ko)_zalias_function_descs}"; do
       print -r -- "${key}: $_zalias_function_descs[${key}]"
@@ -34,8 +47,20 @@ _zalias_cheatsheet() {
     else
       definition="${aliases[${name}]-}"
     fi
-    printf -v row '%s%-*s%s  %s' "${cyan}" "${width}" "${name}" "${reset}" "$_zalias_descriptions[${key}]"
+    mark=''
+    if ((${+_zalias_dir_state[${key}]})); then
+      _zalias_dir_scope "${key}"
+      mark=" [dir: ${REPLY}]"
+    fi
+    printf -v row '%s%-*s%s  %s%s' "${cyan}" "${width}" "${name}" "${reset}" "$_zalias_descriptions[${key}]" "${mark}"
     lines+=("${row}" "${dim}  ${definition}${reset}" '')
+  done
+  for dkey in "${(@ko)_zalias_dir_defs}"; do
+    _zalias_dir_key_split "${dkey}"
+    _zalias_record_unpack _zalias_dir_fields "${_zalias_dir_defs[(e)${dkey}]}"
+    [[ -n "${rec[description]}" ]] && ((! ${+_zalias_dir_state[${reply[2]}]})) || continue
+    printf -v row '%s%-*s%s  %s [dir: %s]' "${cyan}" "${width}" "${reply[2]}" "${reset}" "${rec[description]}" "${reply[1]}"
+    lines+=("${row}" "${dim}  ${rec[value]}${reset}" '')
   done
 
   lines+=("${cyan}Function cheatsheet${reset}" '')

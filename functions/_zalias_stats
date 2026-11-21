@@ -1,0 +1,64 @@
+#!/usr/bin/env zsh
+
+# Prints aliases never used, the most used aliases and the command keys typed
+# most often that no alias covers.
+_zalias_stats() {
+  emulate -L zsh
+  local out row name key cyan='' reset='' definition
+  local -a rows f never=() covers=() shown=()
+  local -A used
+  local -i n
+
+  out="$(_zalias_db 'SELECT name, uses, missed FROM alias ORDER BY uses DESC, name;')" || return 1
+
+  if [[ -t 1 && -z "${NO_COLOR-}" ]]; then
+    cyan=$'\e[1;36m' reset=$'\e[0m'
+  fi
+
+  rows=("${(@ps:\x1e:)out}")
+  for row in "${rows[@]}"; do
+    [[ -n "${row}" ]] || continue
+    f=("${(@ps:\x1f:)row}")
+    ((f[2] > 0)) || continue
+    used[${f[1]}]="${f[2]}"
+    ((${+aliases[${f[1]}]} || ${+galiases[${f[1]}]})) \
+      && shown+=("${f[2]}  ${f[1]}${${f[3]:#0}:+  (missed ${f[3]})}")
+  done
+
+  # Global aliases can appear anywhere in a line and are not recorded, so they are not listed.
+  for key in "${(@ko)_zalias_defined}"; do
+    [[ "${key}" == g:* ]] && continue
+    name="${key}"
+    ((${+aliases[${name}]})) || continue
+    ((${+used[${name}]})) || never+=("${name}")
+  done
+
+  print -r -- "${cyan}Never used${reset}"
+  print -rl -- "${(@)${(@)never:#}/#/  }"
+  print -r -- "${cyan}Most used${reset}"
+  print -rl -- "${(@)${(@)shown[1,10]}/#/  }"
+
+  for name in "${(@k)aliases}"; do
+    [[ "${aliases[${name}]}" == *('$('|'`')* ]] && continue
+    _zalias_split_definition "${aliases[${name}]}" && covers+=("${(j: :)reply}")
+  done
+
+  print -r -- "${cyan}Typed without an alias${reset}"
+  out="$(_zalias_db 'SELECT key, uses FROM command_usage ORDER BY uses DESC, key;')" || return 1
+  rows=("${(@ps:\x1e:)out}")
+  for row in "${rows[@]}"; do
+    ((n >= 10)) && break
+    [[ -n "${row}" ]] || continue
+    f=("${(@ps:\x1f:)row}")
+    definition=''
+    for definition in "${covers[@]}"; do
+      [[ "${definition}" == "${f[1]}" || "${definition}" == "${f[1]} "* ]] && break
+      definition=''
+    done
+    [[ -z "${definition}" ]] || continue
+    print -r -- "  ${f[2]}  ${f[1]}"
+    n+=1
+  done
+}
+
+_zalias_stats "$@"

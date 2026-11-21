@@ -1,0 +1,16 @@
+#!/usr/bin/env zsh
+
+# Runs a command in a disowned background job: no job line, no output, no wait.
+# Set _zalias_sync to run it in the foreground instead (used by the tests).
+_zalias_async() {
+  emulate -L zsh
+
+  if ((${+_zalias_sync})); then
+    "$@" > /dev/null 2>&1
+    return 0
+  fi
+  { "$@" } < /dev/null > /dev/null 2>&1 &!
+  return 0
+}
+
+_zalias_async "$@"

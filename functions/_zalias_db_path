@@ -1,0 +1,11 @@
+#!/usr/bin/env zsh
+
+# Sets REPLY to the absolute path of the database.
+_zalias_db_path() {
+  emulate -L zsh
+  local db_file
+  zstyle -s ':zalias:' db db_file || db_file="${XDG_DATA_HOME:-${HOME}/.local/share}/zalias/zalias.db"
+  REPLY="${db_file:A}"
+}
+
+_zalias_db_path "$@"

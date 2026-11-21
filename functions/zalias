@@ -2,25 +2,79 @@
 # desc: Define and list aliases and function descriptions
 
 zmodload zsh/zutil || return
-autoload -Uz _zalias_collect_function_descriptions _zalias_cheatsheet _zalias_read_desc_line
+autoload -Uz _zalias_collect_function_descriptions _zalias_cheatsheet _zalias_read_desc_line \
+  _zalias_usage _zalias_stats _zalias_search _zalias_tag_list _zalias_remove _zalias_dir_define _zalias_dir_remove \
+  _zalias_dir_list _zalias_dir_describe _zalias_sql_quote _zalias_db
 
 zalias() {
   emulate -L zsh
-  local usage='Usage: zalias [-e] [-b] [-g] [-d description] [--] name=value [...]
-       zalias [name]'
-  local -a opt_e=() no_space_options=() opt_g=() opt_d=()
-  local definition key state_key
+  local -a opt_e=() no_space_options=() opt_g=() opt_d=() opt_D=() opt_dir=() opt_r=() opt_s=() \
+    opt_t=() opt_tag=() opt_stats=() opt_list=()
+  local definition key state_key tag dir sql
+  local -i i flags
 
   zparseopts -D -F -- \
     e=opt_e \
     b=no_space_options \
     g=opt_g \
-    d:=opt_d || return 2
+    d:=opt_d \
+    D=opt_D \
+    -dir:=opt_dir \
+    r=opt_r \
+    s:=opt_s \
+    t+:=opt_t \
+    -tag:=opt_tag \
+    -stats=opt_stats \
+    -list=opt_list || return 2
+
+  if ((${#opt_stats} || ${#opt_s} || ${#opt_tag})); then
+    if (($# || ${#opt_D} || ${#opt_r} || ${#opt_t})); then
+      _zalias_usage
+      return 2
+    fi
+    ((${#opt_stats})) && { _zalias_stats; return; }
+    ((${#opt_s})) && { _zalias_search "${opt_s[2]}"; return; }
+    _zalias_tag_list "${opt_tag[2]}"
+    return
+  fi
+  if ((${#opt_dir} && !${#opt_D})) || ((${#opt_list} && !${#opt_D})) || ((${#opt_D} && (${#opt_g} || ${#opt_t}))); then
+    _zalias_usage
+    return 2
+  fi
+  if ((${#opt_D})); then
+    dir="${${opt_dir[2]#=}:-${PWD}}"
+    # zsh does not expand ~ after --dir=.
+    [[ "${dir}" == '~' || "${dir}" == '~/'* ]] && dir="${HOME}${dir#\~}"
+    if ((${#opt_list})); then
+      _zalias_dir_list
+      return
+    fi
+    if ((${#opt_r})); then
+      (($#)) || { _zalias_usage; return 2; }
+      _zalias_dir_remove "${dir}" "$@"
+      return
+    fi
+    (($#)) || { _zalias_usage; return 2; }
+    for definition in "$@"; do
+      [[ "${definition}" == [^=]*'='* ]] || { _zalias_usage; return 2; }
+    done
+    if [[ ! -d "${dir}" ]]; then
+      print -u2 -r -- "zalias: not a directory: ${dir}"
+      return 1
+    fi
+    _zalias_dir_define "${dir}" "$((${#opt_e} ? 1 : 0))" "$((${#no_space_options} ? 1 : 0))" "${opt_d[2]-}" "$@"
+    return
+  fi
+  if ((${#opt_r})); then
+    (($#)) || { _zalias_usage; return 2; }
+    _zalias_remove "$@"
+    return
+  fi
 
   if (($# == 0)) || { (($# == 1)) && [[ "${1}" != *'='* ]]; }; then
-    if ((${#opt_e} || ${#no_space_options} || ${#opt_g} || ${#opt_d})); then
+    if ((${#opt_e} || ${#no_space_options} || ${#opt_g} || ${#opt_d} || ${#opt_t})); then
       (($#)) && print -u2 -r -- "zalias: expected name=value, got: ${1}"
-      print -u2 -r -- "${usage}"
+      _zalias_usage
       return 2
     fi
 
@@ -36,6 +90,8 @@ zalias() {
       print -r -- "$_zalias_descriptions[g:${1}]"
     elif ((${+_zalias_function_descs[${1}]})); then
       print -r -- "$_zalias_function_descs[${1}]"
+    elif _zalias_dir_describe "${1}"; then
+      :
     else
       print -u2 -r -- "zalias: no description for alias or function: ${1}"
       return 1
@@ -45,7 +101,7 @@ zalias() {
 
   for definition in "$@"; do
     if [[ "${definition}" != [^=]*'='* ]]; then
-      print -u2 -r -- "${usage}"
+      _zalias_usage
       return 2
     fi
   done
@@ -58,17 +114,13 @@ zalias() {
     # regular alias of the same name.
     state_key="${key}"
     ((${#opt_g})) && state_key="g:${key}"
+    _zalias_defined[${state_key}]=1
 
-    if ((${#opt_e})); then
-      _zalias_expand_on_space[${state_key}]=1
+    flags=$(((${#opt_e} > 0) + 2 * (${#no_space_options} > 0)))
+    if ((flags)); then
+      _zalias_flags[${state_key}]="${flags}"
     else
-      unset "_zalias_expand_on_space[${(b)state_key}]"
-    fi
-
-    if ((${#no_space_options})); then
-      _zalias_no_trailing_space[${state_key}]=1
-    else
-      unset "_zalias_no_trailing_space[${(b)state_key}]"
+      unset "_zalias_flags[${(b)state_key}]"
     fi
 
     if ((${#opt_d})); then
@@ -77,6 +129,20 @@ zalias() {
       unset "_zalias_descriptions[${(b)state_key}]"
     fi
   done
+
+  # One database call for every alias and tag of this command.
+  sql=''
+  for ((i = 2; i <= ${#opt_t}; i += 2)); do
+    _zalias_sql_quote "${opt_t[i]}"
+    tag="${REPLY}"
+    for definition in "$@"; do
+      key="${definition%%=*}"
+      ((${#opt_g})) && key="g:${key}"
+      _zalias_sql_quote "${key}"
+      sql+="INSERT OR IGNORE INTO alias(name) VALUES(${REPLY}); INSERT OR IGNORE INTO alias_tag(name, tag) VALUES(${REPLY}, ${tag}); "
+    done
+  done
+  [[ -z "${sql}" ]] || _zalias_db "BEGIN; ${sql}COMMIT;" > /dev/null || return 1
 
   return 0
 }

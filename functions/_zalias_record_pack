@@ -1,0 +1,16 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_record_pack fields-array-name value...
+# Sets REPLY to the values joined into one record. The array named by the first
+# argument lists the field names, in order, and must match the value count.
+# Records are stored in the global tables; read them with _zalias_record_unpack.
+_zalias_record_pack() {
+  emulate -L zsh
+
+  local -a names=("${(@P)1}")
+  shift
+  (($# == ${#names})) || return 1
+  REPLY="${(pj:\x1f:)@}"
+}
+
+_zalias_record_pack "$@"

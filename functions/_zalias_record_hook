@@ -1,0 +1,61 @@
+#!/usr/bin/env zsh
+
+# preexec hook: counts alias uses, missed uses and command keys in the database.
+# The write runs in a background job. Aggregates only; no command lines are kept.
+_zalias_record_hook() {
+  emulate -L zsh -o extended_glob
+  typeset -gA _zalias_pending_use
+  local -A pending=("${(@kv)_zalias_pending_use}")
+  _zalias_pending_use=()
+
+  ((${+commands[sqlite3]})) || return 0
+  zstyle -T ':zalias:' stats || return 0
+  [[ -n "${1}" && "${1}" != *$'\n'* && "${1}" != ' '* ]] || return 0
+
+  # Raw words keep their quotes, so 'gs' and \gs (which skip the alias) do not count as a use.
+  local -a raw=("${(@z)1}")
+  local first key sql expanded
+
+  while ((${#raw})) && [[ "${raw[1]}" == [A-Za-z_][A-Za-z0-9_]#=* \
+    || "${raw[1]}" == (sudo|command|env|noglob|nocorrect|time|builtin|exec) ]]; do
+    shift raw
+  done
+  ((${#raw})) || return 0
+  first="${raw[1]}"
+  [[ -n "${first}" ]] || return 0
+
+  _zalias_match_definition "${1}"
+  expanded="${REPLY}"
+
+  if ((${+aliases[${first}]})); then
+    _zalias_sql_quote "${first}"
+    sql="INSERT INTO alias(name, uses) VALUES(${REPLY}, 1) ON CONFLICT(name) DO UPDATE SET uses = uses + 1;"
+  elif [[ -n "${expanded}" ]] && ((${+pending[${expanded}]})); then
+    # Space expansion already rewrote the line: this was a use of the alias.
+    _zalias_sql_quote "${expanded}"
+    sql="INSERT INTO alias(name, uses) VALUES(${REPLY}, 1) ON CONFLICT(name) DO UPDATE SET uses = uses + 1;"
+  else
+    # Command key: the basename of the first word, plus the subcommand for a few tools.
+    key="${(Q)first:t}"
+    [[ "${key}" == [A-Za-z0-9._+-]## && ${#key} -le 64 ]] || return 0
+    case "${key}" in
+      git | docker | npm | cargo | kubectl)
+        [[ "${(Q)raw[2]-}" == [a-z][a-z0-9-]# ]] && key+=" ${(Q)raw[2]}"
+        ;;
+    esac
+    _zalias_sql_quote "${key}"
+    sql="INSERT INTO command_usage(key, uses) VALUES(${REPLY}, 1) ON CONFLICT(key) DO UPDATE SET uses = uses + 1;"
+    if [[ -n "${expanded}" ]]; then
+      _zalias_sql_quote "${expanded}"
+      sql+=" INSERT INTO alias(name, missed) VALUES(${REPLY}, 1) ON CONFLICT(name) DO UPDATE SET missed = missed + 1;"
+    fi
+  fi
+
+  # Prepare the database here, not in the background job: a variable set in
+  # the job never reaches this shell, so every write would redo the check.
+  _zalias_db_path
+  [[ "${_zalias_db_ready-}" == "${REPLY}" && -f "${REPLY}" ]] || _zalias_db '' 2> /dev/null || return 0
+  _zalias_async _zalias_db "${sql}"
+}
+
+_zalias_record_hook "$@"

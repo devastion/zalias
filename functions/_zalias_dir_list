@@ -1,0 +1,23 @@
+#!/usr/bin/env zsh
+
+# Prints every directory alias as "dir: name=value", plus its description.
+_zalias_dir_list() {
+  emulate -L zsh
+  typeset -gA _zalias_dir_defs
+  local key val line
+  local -A rec
+
+  # Another shell may have added aliases since this one loaded them.
+  _zalias_db '' || return 1
+  _zalias_dir_load
+
+  for key val in "${(@kv)_zalias_dir_defs}"; do
+    _zalias_dir_key_split "${key}"
+    _zalias_record_unpack _zalias_dir_fields "${val}"
+    line="${reply[1]}: ${reply[2]}=${rec[value]}"
+    [[ -n "${rec[description]}" ]] && line+="  # ${rec[description]}"
+    print -r -- "${line}"
+  done | command sort
+}
+
+_zalias_dir_list "$@"

@@ -1,0 +1,11 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_dir_key_split key
+# Sets reply to (dir name), the parts of a key made by _zalias_dir_key.
+_zalias_dir_key_split() {
+  emulate -L zsh
+  local US=$'\x1f'
+  reply=("${1%%${US}*}" "${1#*${US}}")
+}
+
+_zalias_dir_key_split "$@"

@@ -5,5 +5,13 @@ _arguments \
   '-b[Do not leave a trailing Space after expansion]' \
   '-g[Create a global alias]' \
   '-d[Set the alias description]:description:' \
+  '*-t[Tag the alias]:tag:' \
+  '-D[Scope the alias to a directory]' \
+  '--dir=[Directory for -D (default: current)]:directory:_files -/' \
+  '--list[With -D, list directory aliases]' \
+  '-r[Remove aliases]' \
+  '-s[Search aliases, functions and descriptions]:text:' \
+  '--tag=[List aliases with a tag]:tag:' \
+  '--stats[Show alias usage statistics]' \
   '1:alias or name=value:_aliases' \
   '*:argument:'

@@ -1,0 +1,34 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_dir_remove dir name ...
+_zalias_dir_remove() {
+  emulate -L zsh
+  typeset -gA _zalias_dir_defs
+  local dir="${1:A}" name qdir qname key
+  local -a sql=()
+  local REPLY
+  shift
+
+  _zalias_db '' || return 1
+  _zalias_dir_load
+  _zalias_sql_quote "${dir}"
+  qdir="${REPLY}"
+  for name in "$@"; do
+    _zalias_dir_key "${dir}" "${name}"
+    if ((! ${+_zalias_dir_defs[${REPLY}]})); then
+      print -u2 -r -- "zalias: no directory alias ${name} for ${dir}"
+      return 1
+    fi
+    _zalias_sql_quote "${name}"
+    sql+=("DELETE FROM dir_alias WHERE dir = ${qdir} AND name = ${REPLY};")
+  done
+  _zalias_db "BEGIN; ${(j: :)sql} COMMIT;" > /dev/null || return 1
+
+  for name in "$@"; do
+    _zalias_dir_key "${dir}" "${name}"
+    unset "_zalias_dir_defs[${(b)REPLY}]"
+  done
+  _zalias_dir_apply
+}
+
+_zalias_dir_remove "$@"

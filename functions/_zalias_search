@@ -1,0 +1,43 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_search text
+# Lists aliases, functions and directory aliases whose name, definition or
+# description contains text (case-insensitive). Returns 1 when nothing matches.
+_zalias_search() {
+  emulate -L zsh
+  local needle="${(L)1}" name desc key val dir
+  local -A rec
+  local -i found=0
+  typeset -gA _zalias_dir_defs
+
+  _zalias_collect_function_descriptions
+
+  for name in "${(@ko)aliases}"; do
+    desc="${_zalias_descriptions[${name}]-}"
+    _zalias_search_hit "${needle}" "${name}" "${aliases[${name}]}" "${desc}" &&
+      { print -r -- "${name}: ${desc:-${aliases[${name}]}}"; found=1; }
+  done
+  for name in "${(@ko)galiases}"; do
+    desc="${_zalias_descriptions[g:${name}]-}"
+    _zalias_search_hit "${needle}" "${name}" "${galiases[${name}]}" "${desc}" &&
+      { print -r -- "${name}: ${desc:-${galiases[${name}]}}"; found=1; }
+  done
+  for name in "${(@ko)_zalias_function_descs}"; do
+    desc="${_zalias_function_descs[${name}]}"
+    _zalias_search_hit "${needle}" "${name}" "${desc}" &&
+      { print -r -- "${name}: ${desc}"; found=1; }
+  done
+  for key val in "${(@kv)_zalias_dir_defs}"; do
+    _zalias_dir_key_split "${key}"
+    name="${reply[2]}"
+    ((${+_zalias_dir_state[${name}]})) && continue
+    dir="${reply[1]}"
+    _zalias_record_unpack _zalias_dir_fields "${val}"
+    _zalias_search_hit "${needle}" "${name}" "${rec[value]}" "${rec[description]}" &&
+      { print -r -- "${name}: ${rec[description]:-${rec[value]}} [dir: ${dir}]"; found=1; }
+  done
+
+  ((found))
+}
+
+_zalias_search "$@"

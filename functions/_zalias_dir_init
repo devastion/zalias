@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+# One-shot precmd hook: loads directory aliases after the rc file has run.
+_zalias_dir_init() {
+  emulate -L zsh
+  add-zsh-hook -d precmd _zalias_dir_init
+  _zalias_dir_load
+  _zalias_dir_apply
+  return 0
+}
+
+_zalias_dir_init "$@"

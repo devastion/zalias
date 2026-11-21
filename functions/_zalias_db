@@ -1,0 +1,57 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_db <sql>
+# Creates or migrates the database on first use, then runs the SQL. Output uses
+# ASCII separators: fields end with \x1f, rows with \x1e.
+_zalias_db() {
+  emulate -L zsh
+  local db version
+  local -a run
+  local -i current=2
+  local schema='PRAGMA journal_mode=WAL;
+CREATE TABLE IF NOT EXISTS alias(name TEXT PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0, missed INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS alias_tag(name TEXT NOT NULL REFERENCES alias(name) ON DELETE CASCADE, tag TEXT NOT NULL, PRIMARY KEY(name, tag)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS command_usage(key TEXT PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS dir_alias(dir TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, description TEXT, flags INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(dir, name)) WITHOUT ROWID;
+PRAGMA user_version=2;'
+
+  if ((! ${+commands[sqlite3]})); then
+    print -u2 -r -- 'zalias: sqlite3 not found'
+    return 1
+  fi
+
+  _zalias_db_path
+  db="${REPLY}"
+  run=(command sqlite3 -batch -bail -init /dev/null -ascii -cmd '.timeout 2000' "${db}")
+
+  if [[ "${_zalias_db_ready-}" != "${db}" || ! -f "${db}" ]]; then
+    # Usage data and directory aliases are private. The subshell scopes the
+    # umask to the creation of the directory and file; sqlite gives its WAL
+    # files the permissions of the database.
+    version="$(
+      umask 077
+      command mkdir -p -- "${db:h}" &&
+        command sqlite3 -batch -init /dev/null -cmd '.timeout 2000' "${db}" 'PRAGMA user_version;'
+    )" || return 1
+    if ((version > current)); then
+      print -u2 -r -- "zalias: database schema ${version} is newer than this plugin supports"
+      return 1
+    fi
+    if ((version == 1)); then
+      # Version 1 held the same data in other tables. There is no migration:
+      # its usage counts and directory aliases are dropped.
+      command rm -f -- "${db}" "${db}-wal" "${db}-shm" "${db}-journal" || return 1
+      version=0
+    fi
+    if ((version < current)); then
+      (umask 077; "${run[@]}" <<< "${schema}" > /dev/null) || return 1
+    fi
+    typeset -g _zalias_db_ready="${db}"
+  fi
+
+  [[ -n "${1-}" ]] || return 0
+  # A PRAGMA given as -cmd makes this sqlite3 ignore stdin, so it goes in the SQL.
+  "${run[@]}" <<< "PRAGMA foreign_keys=ON; ${1}"
+}
+
+_zalias_db "$@"

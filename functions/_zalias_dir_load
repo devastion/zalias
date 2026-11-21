@@ -1,0 +1,30 @@
+#!/usr/bin/env zsh
+
+# Fills _zalias_dir_defs from the database. Does nothing when there is no
+# database file or no sqlite3.
+_zalias_dir_load() {
+  emulate -L zsh
+  typeset -gA _zalias_dir_defs
+  local out row key
+  local -a rows f
+  local REPLY
+
+  _zalias_db_path
+  [[ -f "${REPLY}" ]] && ((${+commands[sqlite3]})) || return 0
+  out="$(_zalias_db "SELECT dir, name, value, ifnull(description, ''), flags & 1, (flags >> 1) & 1 FROM dir_alias;" 2> /dev/null)" || return 0
+
+  _zalias_dir_defs=()
+  rows=("${(@ps:\x1e:)out}")
+  for row in "${rows[@]}"; do
+    [[ -n "${row}" ]] || continue
+    f=("${(@ps:\x1f:)row}")
+    # Columns: dir, name, value, description, expand, no_space.
+    _zalias_dir_key "${f[1]}" "${f[2]}"
+    key="${REPLY}"
+    _zalias_record_pack _zalias_dir_fields "${f[3]}" "${f[5]}" "${f[6]}" "${f[4]}"
+    _zalias_dir_defs+=("${key}" "${REPLY}")
+  done
+  return 0
+}
+
+_zalias_dir_load "$@"

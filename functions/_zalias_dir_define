@@ -1,0 +1,42 @@
+#!/usr/bin/env zsh
+
+# Usage: _zalias_dir_define dir expand no_space description name=value ...
+# expand and no_space are 0 or 1. Stores the aliases for dir and applies them.
+_zalias_dir_define() {
+  emulate -L zsh
+  typeset -gA _zalias_dir_defs
+  local dir="${1:A}" expand="${2}" no_space="${3}" desc="${4}" definition name value
+  local qdir qname qvalue qdesc key
+  local -i flags=$((expand + 2 * no_space)) now=${EPOCHSECONDS:-0}
+  local -a sql=()
+  shift 4
+
+  _zalias_sql_quote "${dir}"
+  qdir="${REPLY}"
+  _zalias_sql_quote "${desc}"
+  qdesc="${REPLY}"
+
+  for definition in "$@"; do
+    name="${definition%%=*}"
+    value="${definition#*=}"
+    _zalias_sql_quote "${name}"
+    qname="${REPLY}"
+    _zalias_sql_quote "${value}"
+    qvalue="${REPLY}"
+    # flags: 1 = expand on space, 2 = no trailing space. Redefining keeps created_at.
+    sql+=("INSERT INTO dir_alias(dir, name, value, description, flags, created_at, updated_at) VALUES(${qdir}, ${qname}, ${qvalue}, ${qdesc}, ${flags}, ${now}, ${now}) ON CONFLICT(dir, name) DO UPDATE SET value = excluded.value, description = excluded.description, flags = excluded.flags, updated_at = excluded.updated_at;")
+  done
+  _zalias_db "BEGIN; ${(j: :)sql} COMMIT;" > /dev/null || return 1
+
+  for definition in "$@"; do
+    name="${definition%%=*}"
+    value="${definition#*=}"
+    _zalias_dir_key "${dir}" "${name}"
+    key="${REPLY}"
+    _zalias_record_pack _zalias_dir_fields "${value}" "${expand}" "${no_space}" "${desc}"
+    _zalias_dir_defs+=("${key}" "${REPLY}")
+  done
+  _zalias_dir_apply
+}
+
+_zalias_dir_define "$@"
